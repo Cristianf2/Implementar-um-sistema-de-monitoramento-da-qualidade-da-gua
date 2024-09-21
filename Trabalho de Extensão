@@ -1,0 +1,370 @@
+import csv
+from flask import Flask, jsonify
+import random
+import time
+import os
+
+app = Flask(__name__)
+
+# Configurações do arquivo CSV
+DATA_FILE = 'water_quality_data.csv'
+if not os.path.exists(DATA_FILE):
+    with open(DATA_FILE, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['timestamp', 'pH', 'turbidez', 'cloro_residual'])
+
+# Função para verificar a qualidade da água
+def check_water_quality(data):
+    alerts = []
+    if data['pH'] < 6.5 or data['pH'] > 8.5:
+        alerts.append("pH fora dos padrões aceitáveis")
+    if data['turbidez'] > 5:
+        alerts.append("Turbidez elevada")
+    if data['cloro_residual'] < 0.2:
+        alerts.append("Nível de cloro residual baixo")
+    return alerts
+
+# Simula dados de qualidade da água
+def get_water_quality_data():
+    return {
+        "pH": round(random.uniform(6.0, 9.0), 2),
+        "turbidez": round(random.uniform(0, 100), 2),
+        "cloro_residual": round(random.uniform(0, 4), 2),
+        "timestamp": time.time()
+    }
+
+@app.route('/api/water-quality', methods=['GET'])
+def water_quality():
+    data = get_water_quality_data()
+    alerts = check_water_quality(data)
+
+    # Armazenar dados em CSV
+    with open(DATA_FILE, mode='a', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow([data['timestamp'], data['pH'], data['turbidez'], data['cloro_residual']])
+    
+    response = {
+        "data": data,
+        "alerts": alerts
+    }
+    return jsonify(response)
+
+if __name__ == '__main__':
+    app.run(debug=True)
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitoramento de Qualidade da Água</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { color: #2C3E50; }
+        #data { margin-top: 20px; }
+        #alerts { color: red; margin-top: 20px; }
+        canvas { margin-top: 20px; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>Monitoramento da Qualidade da Água</h1>
+    <button onclick="fetchWaterQuality()">Atualizar Dados</button>
+    <div id="data">
+        <p>pH: <span id="ph"></span></p>
+        <p>Turbidez: <span id="turbidez"></span> NTU</p>
+        <p>Cloro Residual: <span id="cloro"></span> mg/L</p>
+        <p>Última Atualização: <span id="timestamp"></span></p>
+    </div>
+    <div id="alerts"></div>
+    <canvas id="myChart" width="400" height="200"></canvas>
+
+    <script>
+        let labels = [];
+        let phData = [];
+        let turbidezData = [];
+        let cloroData = [];
+
+        function fetchWaterQuality() {
+            fetch('http://localhost:5000/api/water-quality')
+                .then(response => response.json())
+                .then(data => {
+                    const { data: qualityData, alerts } = data;
+                    document.getElementById('ph').innerText = qualityData.pH;
+                    document.getElementById('turbidez').innerText = qualityData.turbidez;
+                    document.getElementById('cloro').innerText = qualityData.cloro_residual;
+                    document.getElementById('timestamp').innerText = new Date(qualityData.timestamp * 1000).toLocaleString();
+
+                    // Exibir alertas
+                    document.getElementById('alerts').innerText = alerts.length > 0 ? alerts.join(', ') : "Nenhum alerta";
+
+                    // Adicionar dados para o gráfico
+                    labels.push(new Date(qualityData.timestamp * 1000).toLocaleTimeString());
+                    phData.push(qualityData.pH);
+                    turbidezData.push(qualityData.turbidez);
+                    cloroData.push(qualityData.cloro_residual);
+                    updateChart();
+                })
+                .catch(error => console.error('Erro:', error));
+        }
+
+        let myChart;
+
+        function updateChart() {
+            const ctx = document.getElementById('myChart').getContext('2d');
+            if (myChart) {
+                myChart.destroy();
+            }
+            myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'pH',
+                            data: phData,
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            fill: false
+                        },
+                        {
+                            label: 'Turbidez',
+                            data: turbidezData,
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            fill: false
+                        },
+                        {
+                            label: 'Cloro Residual',
+                            data: cloroData,
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
+
+from flask import Flask, jsonify, request
+import random
+import time
+
+app = Flask(__name__)
+
+# Simula dados de qualidade da água
+def get_water_quality_data():
+    return {
+        "pH": round(random.uniform(6.5, 8.5), 2),
+        "turbidez": round(random.uniform(0, 100), 2),
+        "cloro_residual": round(random.uniform(0, 4), 2),
+        "timestamp": time.time()
+    }
+
+@app.route('/api/water-quality', methods=['GET'])
+def water_quality():
+    data = get_water_quality_data()
+    return jsonify(data)
+
+if __name__ == '__main__':
+    app.run(debug=True)
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitoramento de Qualidade da Água</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { color: #2C3E50; }
+        #data { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Monitoramento da Qualidade da Água</h1>
+    <button onclick="fetchWaterQuality()">Atualizar Dados</button>
+    <div id="data">
+        <p>pH: <span id="ph"></span></p>
+        <p>Turbidez: <span id="turbidez"></span> NTU</p>
+        <p>Cloro Residual: <span id="cloro"></span> mg/L</p>
+        <p>Última Atualização: <span id="timestamp"></span></p>
+    </div>
+
+    <script>
+        function fetchWaterQuality() {
+            fetch('http://localhost:5000/api/water-quality')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('ph').innerText = data.pH;
+                    document.getElementById('turbidez').innerText = data.turbidez;
+                    document.getElementById('cloro').innerText = data.cloro_residual;
+                    document.getElementById('timestamp').innerText = new Date(data.timestamp * 1000).toLocaleString();
+                })
+                .catch(error => console.error('Erro:', error));
+        }
+    </script>
+</body>
+</html>
+
+import csv
+from flask import Flask, jsonify, request
+import random
+import time
+import os
+
+app = Flask(__name__)
+
+# Configurações do arquivo CSV
+DATA_FILE = 'water_quality_data.csv'
+if not os.path.exists(DATA_FILE):
+    with open(DATA_FILE, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['timestamp', 'pH', 'turbidez', 'cloro_residual'])
+
+# Função para verificar a qualidade da água
+def check_water_quality(data):
+    alerts = []
+    if data['pH'] < 6.5 or data['pH'] > 8.5:
+        alerts.append("pH fora dos padrões aceitáveis")
+    if data['turbidez'] > 5:
+        alerts.append("Turbidez elevada")
+    if data['cloro_residual'] < 0.2:
+        alerts.append("Nível de cloro residual baixo")
+    return alerts
+
+# Simula dados de qualidade da água
+def get_water_quality_data():
+    return {
+        "pH": round(random.uniform(6.0, 9.0), 2),
+        "turbidez": round(random.uniform(0, 100), 2),
+        "cloro_residual": round(random.uniform(0, 4), 2),
+        "timestamp": time.time()
+    }
+
+@app.route('/api/water-quality', methods=['GET'])
+def water_quality():
+    data = get_water_quality_data()
+    alerts = check_water_quality(data)
+
+    # Armazenar dados em CSV
+    with open(DATA_FILE, mode='a', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow([data['timestamp'], data['pH'], data['turbidez'], data['cloro_residual']])
+    
+    response = {
+        "data": data,
+        "alerts": alerts
+    }
+    return jsonify(response)
+
+if __name__ == '__main__':
+    app.run(debug=True)
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitoramento de Qualidade da Água</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { color: #2C3E50; }
+        #data { margin-top: 20px; }
+        #alerts { color: red; margin-top: 20px; }
+        canvas { margin-top: 20px; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>Monitoramento da Qualidade da Água</h1>
+    <button onclick="fetchWaterQuality()">Atualizar Dados</button>
+    <div id="data">
+        <p>pH: <span id="ph"></span></p>
+        <p>Turbidez: <span id="turbidez"></span> NTU</p>
+        <p>Cloro Residual: <span id="cloro"></span> mg/L</p>
+        <p>Última Atualização: <span id="timestamp"></span></p>
+    </div>
+    <div id="alerts"></div>
+    <canvas id="myChart" width="400" height="200"></canvas>
+
+    <script>
+        let labels = [];
+        let phData = [];
+        let turbidezData = [];
+        let cloroData = [];
+
+        function fetchWaterQuality() {
+            fetch('http://localhost:5000/api/water-quality')
+                .then(response => response.json())
+                .then(data => {
+                    const { data: qualityData, alerts } = data;
+                    document.getElementById('ph').innerText = qualityData.pH;
+                    document.getElementById('turbidez').innerText = qualityData.turbidez;
+                    document.getElementById('cloro').innerText = qualityData.cloro_residual;
+                    document.getElementById('timestamp').innerText = new Date(qualityData.timestamp * 1000).toLocaleString();
+
+                    // Exibir alertas
+                    document.getElementById('alerts').innerText = alerts.length > 0 ? alerts.join(', ') : "Nenhum alerta";
+
+                    // Adicionar dados para o gráfico
+                    labels.push(new Date(qualityData.timestamp * 1000).toLocaleTimeString());
+                    phData.push(qualityData.pH);
+                    turbidezData.push(qualityData.turbidez);
+                    cloroData.push(qualityData.cloro_residual);
+                    updateChart();
+                })
+                .catch(error => console.error('Erro:', error));
+        }
+
+        let myChart;
+
+        function updateChart() {
+            const ctx = document.getElementById('myChart').getContext('2d');
+            if (myChart) {
+                myChart.destroy();
+            }
+            myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'pH',
+                            data: phData,
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            fill: false
+                        },
+                        {
+                            label: 'Turbidez',
+                            data: turbidezData,
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            fill: false
+                        },
+                        {
+                            label: 'Cloro Residual',
+                            data: cloroData,
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
